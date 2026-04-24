@@ -1,6 +1,15 @@
 ---
 # ============================================================
-# Deployment PayMyBuddy (application SpringBoot)
+# Deployment PayMyBuddy (SpringBoot)
+#
+# Variables d'environnement issues du Dockerfile officiel :
+#   SPRING_DATASOURCE_USERNAME=root
+#   SPRING_DATASOURCE_PASSWORD=password
+#   SPRING_DATASOURCE_URL=jdbc:mysql://<host>:3306/db_paymybuddy
+#
+# En K8s, l'URL pointe vers le Service ClusterIP "mysql:3306"
+# au lieu de l'IP docker0 (172.17.0.1) utilisée en local.
+# Les credentials sont surchargés depuis le Secret Kubernetes.
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -27,7 +36,8 @@ spec:
         app: paymybuddy
         tier: frontend
     spec:
-      # S'assurer que MySQL est disponible avant de démarrer PayMyBuddy
+      # initContainer : attend que MySQL soit prêt sur le port 3306
+      # avant de démarrer l'application SpringBoot
       initContainers:
         - name: wait-for-mysql
           image: busybox:1.36
@@ -35,36 +45,46 @@ spec:
             - sh
             - -c
             - |
+              echo "Attente de MySQL sur mysql:3306..."
               until nc -z mysql 3306; do
-                echo "En attente de MySQL..."
+                echo "MySQL pas encore prêt, nouvelle tentative dans 3s..."
                 sleep 3
               done
-              echo "MySQL est disponible !"
+              echo "MySQL est disponible ! Démarrage de PayMyBuddy..."
       containers:
         - name: paymybuddy
-          image: eazytraining/paymybuddy:latest
+          # Image buildée localement avec : mvn clean install && docker build -t paymybuddy:latest .
+          # Sur Minikube : eval $(minikube docker-env) avant le build
+          image: paymybuddy:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
           env:
-            # Variables d'environnement pour la connexion à MySQL
-            # (issues du Dockerfile eazytraining/paymybuddy)
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://mysql:3306/paymybuddy?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+            # -------------------------------------------------------
+            # Variables issues du Dockerfile officiel PayMyBuddy
+            # Surchargées depuis le Secret pour éviter les mots de passe en clair
+            # -------------------------------------------------------
+
+            # Utilisateur MySQL (root, comme dans le Dockerfile)
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
-                  key: mysql-user
+                  key: mysql-username
+
+            # Mot de passe MySQL (password, comme dans le Dockerfile)
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
                   key: mysql-password
-            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
-              value: "update"
-            - name: SPRING_JPA_DATABASE_PLATFORM
-              value: "org.hibernate.dialect.MySQL8Dialect"
+
+            # URL JDBC : en K8s on remplace 172.17.0.1 par le nom DNS du Service ClusterIP "mysql"
+            # Le nom de la base db_paymybuddy est identique à la config locale
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql:3306/db_paymybuddy?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+
           livenessProbe:
             httpGet:
               path: /
@@ -77,7 +97,7 @@ spec:
             httpGet:
               path: /
               port: 8080
-            initialDelaySeconds: 30
+            initialDelaySeconds: 45
             periodSeconds: 10
             timeoutSeconds: 5
           resources:
@@ -90,7 +110,9 @@ spec:
 
 ---
 # ============================================================
-# Service PayMyBuddy - NodePort (accessible depuis l'extérieur)
+# Service PayMyBuddy — NodePort
+# Expose l'application sur le port 30080 de chaque nœud
+# Accès : http://<NODE_IP>:30080
 # ============================================================
 apiVersion: v1
 kind: Service
@@ -109,6 +131,5 @@ spec:
     - name: http
       port: 8080
       targetPort: 8080
-      # NodePort entre 30000-32767 ; laisser Kubernetes choisir ou fixer un port
       nodePort: 30080
       protocol: TCP

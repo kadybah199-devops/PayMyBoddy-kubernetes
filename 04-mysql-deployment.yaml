@@ -1,6 +1,8 @@
 ---
 # ============================================================
-# Deployment MySQL - 1 seul réplicat (stateful)
+# Deployment MySQL — 1 seul réplicat (exigence du TP)
+# Les scripts SQL sont montés dans /docker-entrypoint-initdb.d/
+# MySQL les exécute automatiquement à la première initialisation
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -16,7 +18,7 @@ spec:
     matchLabels:
       app: paymybuddy
       tier: database
-  # Stratégie Recreate : obligatoire pour MySQL (pas de rolling update avec 1 seul réplicat)
+  # Recreate obligatoire : MySQL ne supporte pas le rolling update avec 1 seul réplicat
   strategy:
     type: Recreate
   template:
@@ -32,48 +34,35 @@ spec:
             - containerPort: 3306
               name: mysql
           env:
+            # MYSQL_ROOT_PASSWORD : issu du Secret (valeur "password" comme dans le Dockerfile)
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
                   key: mysql-root-password
+            # MYSQL_DATABASE : crée automatiquement la BDD db_paymybuddy au démarrage
             - name: MYSQL_DATABASE
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
                   key: mysql-database
-            - name: MYSQL_USER
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: mysql-user
-            - name: MYSQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mysql-secret
-                  key: mysql-password
           volumeMounts:
-            - name: mysql-storage
+            # Données persistées dans /data du nœud via le PVC
+            - name: mysql-data
               mountPath: /var/lib/mysql
-          # Healthcheck pour s'assurer que MySQL est prêt avant que PayMyBuddy se connecte
+            # Scripts SQL montés pour initialisation automatique au premier démarrage
+            - name: mysql-initdb
+              mountPath: /docker-entrypoint-initdb.d
           livenessProbe:
             exec:
-              command:
-                - mysqladmin
-                - ping
-                - -h
-                - localhost
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             exec:
-              command:
-                - mysqladmin
-                - ping
-                - -h
-                - localhost
+              command: ["mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
             initialDelaySeconds: 15
             periodSeconds: 5
             timeoutSeconds: 3
@@ -85,13 +74,20 @@ spec:
               memory: "512Mi"
               cpu: "500m"
       volumes:
-        - name: mysql-storage
+        # Volume persistant (hostPath: /data/mysql sur le nœud)
+        - name: mysql-data
           persistentVolumeClaim:
             claimName: mysql-pvc
+        # ConfigMap contenant les scripts SQL d'init (create.sql + data.sql)
+        - name: mysql-initdb
+          configMap:
+            name: mysql-initdb-config
 
 ---
 # ============================================================
-# Service MySQL - ClusterIP (accessible uniquement en interne)
+# Service MySQL — ClusterIP
+# Accessible uniquement en interne via le DNS "mysql:3306"
+# C'est exactement l'adresse attendue dans SPRING_DATASOURCE_URL
 # ============================================================
 apiVersion: v1
 kind: Service

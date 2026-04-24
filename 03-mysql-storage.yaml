@@ -1,25 +1,24 @@
 ---
-# PersistentVolume - stockage sur le nœud dans /data
+# PersistentVolume : stockage physique sur le nœud dans /data
+# Le TP demande explicitement de stocker les données dans /data du nœud
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: mysql-pv
   labels:
     app: paymybuddy
-    type: local
 spec:
   storageClassName: manual
   capacity:
     storage: 5Gi
   accessModes:
     - ReadWriteOnce
-  # Données stockées dans /data du nœud (comme demandé dans le TP)
   hostPath:
-    path: "/data/mysql"
+    path: "/data/mysql"       # Données stockées dans /data du nœud (exigence du TP)
   persistentVolumeReclaimPolicy: Retain
 
 ---
-# PersistentVolumeClaim - réclame le PV ci-dessus
+# PersistentVolumeClaim : réclame le PV ci-dessus
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
