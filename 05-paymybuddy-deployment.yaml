@@ -2,14 +2,14 @@
 # ============================================================
 # Deployment PayMyBuddy (SpringBoot)
 #
+# AVANT d'appliquer ce manifest, builder l'image sur node1 :
+#   mvn clean install
+#   docker build -t paymybuddy:latest .
+#
 # Variables d'environnement issues du Dockerfile officiel :
 #   SPRING_DATASOURCE_USERNAME=root
 #   SPRING_DATASOURCE_PASSWORD=password
-#   SPRING_DATASOURCE_URL=jdbc:mysql://<host>:3306/db_paymybuddy
-#
-# En K8s, l'URL pointe vers le Service ClusterIP "mysql:3306"
-# au lieu de l'IP docker0 (172.17.0.1) utilisée en local.
-# Les credentials sont surchargés depuis le Secret Kubernetes.
+#   SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/db_paymybuddy
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -37,7 +37,6 @@ spec:
         tier: frontend
     spec:
       # initContainer : attend que MySQL soit prêt sur le port 3306
-      # avant de démarrer l'application SpringBoot
       initContainers:
         - name: wait-for-mysql
           image: busybox:1.36
@@ -53,35 +52,25 @@ spec:
               echo "MySQL est disponible ! Démarrage de PayMyBuddy..."
       containers:
         - name: paymybuddy
-          # Image buildée localement avec : mvn clean install && docker build -t paymybuddy:latest .
-          # Sur Minikube : eval $(minikube docker-env) avant le build
-          image: paymybuddy:latest
-          imagePullPolicy: IfNotPresent
+          image: kady199/paymyboddy-backend:latest
+          # Always = toujours puller depuis Docker Hub (image publique disponible)
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http
           env:
-            # -------------------------------------------------------
-            # Variables issues du Dockerfile officiel PayMyBuddy
-            # Surchargées depuis le Secret pour éviter les mots de passe en clair
-            # -------------------------------------------------------
-
-            # Utilisateur MySQL (root, comme dans le Dockerfile)
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
                   key: mysql-username
 
-            # Mot de passe MySQL (password, comme dans le Dockerfile)
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
                   key: mysql-password
 
-            # URL JDBC : en K8s on remplace 172.17.0.1 par le nom DNS du Service ClusterIP "mysql"
-            # Le nom de la base db_paymybuddy est identique à la config locale
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:mysql://mysql:3306/db_paymybuddy?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
 
@@ -109,11 +98,6 @@ spec:
               cpu: "500m"
 
 ---
-# ============================================================
-# Service PayMyBuddy — NodePort
-# Expose l'application sur le port 30080 de chaque nœud
-# Accès : http://<NODE_IP>:30080
-# ============================================================
 apiVersion: v1
 kind: Service
 metadata:

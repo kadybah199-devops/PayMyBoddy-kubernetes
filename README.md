@@ -1,6 +1,6 @@
 # 🚀 Mini-Projet Kubernetes — Déploiement de PayMyBuddy
 
-Déploiement de l'application SpringBoot **PayMyBuddy** avec une base **MySQL** sur Kubernetes, à l'aide de manifests YAML (sans Helm).
+Déploiement de l'application SpringBoot **PayMyBuddy** avec une base **MySQL** sur Kubernetes, à l'aide de manifests YAML écrits à la main (sans Helm).
 
 ---
 
@@ -25,32 +25,64 @@ paymybuddy-k8s/
 [Utilisateur]
       │  http://<NODE_IP>:30080
       ▼
-┌──────────────────────────┐
-│   Service NodePort       │  paymybuddy → port 30080
-└──────────┬───────────────┘
-           ▼
-┌──────────────────────────┐
-│   Deployment PayMyBuddy  │  image: paymybuddy:latest (buildée localement)
-│   (SpringBoot :8080)     │  SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/db_paymybuddy
-└──────────┬───────────────┘
-           │  (DNS interne K8s)
-           ▼
-┌──────────────────────────┐
-│   Service ClusterIP      │  mysql:3306
-└──────────┬───────────────┘
-           ▼
-┌──────────────────────────┐
-│   Deployment MySQL 8.0   │  1 réplicat — init via create.sql + data.sql
-└──────────┬───────────────┘
-           ▼
-┌──────────────────────────┐
-│   PVC → PV hostPath      │  /data/mysql sur le nœud
-└──────────────────────────┘
+┌──────────────────────────────────────────┐
+│   Service NodePort                       │
+│   paymybuddy → port 30080                │
+└──────────────────┬───────────────────────┘
+                   ▼
+┌──────────────────────────────────────────┐
+│   Deployment PayMyBuddy (SpringBoot)     │
+│   image: kady199/paymyboddy-backend:latest│
+│   SPRING_DATASOURCE_URL=                 │
+│   jdbc:mysql://mysql:3306/db_paymybuddy  │
+└──────────────────┬───────────────────────┘
+                   │  DNS interne Kubernetes
+                   ▼
+┌──────────────────────────────────────────┐
+│   Service ClusterIP  →  mysql:3306       │
+└──────────────────┬───────────────────────┘
+                   ▼
+┌──────────────────────────────────────────┐
+│   Deployment MySQL 8.0 (1 réplicat)      │
+│   Init auto : create.sql + data.sql      │
+└──────────────────┬───────────────────────┘
+                   ▼
+┌──────────────────────────────────────────┐
+│   PersistentVolume  hostPath:/data/mysql │
+│   (données stockées sur le nœud)         │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
-## ⚙️ Variables d'environnement (issues du Dockerfile officiel)
+## 🐳 Image Docker
+
+L'image de l'application est hébergée sur Docker Hub :
+
+```
+kady199/paymyboddy-backend:latest
+sha256:a69c67a04e69b9021209ea626c47bb42ee2f6980c5519a4e294cf4c16f614ec3
+```
+
+Elle a été buildée à partir du Dockerfile officiel du projet :
+
+```dockerfile
+FROM amazoncorretto:17-alpine
+ARG JAR_FILE=target/paymybuddy.jar
+WORKDIR /app
+COPY ${JAR_FILE} paymybuddy.jar
+ENV SPRING_DATASOURCE_USERNAME=root
+ENV SPRING_DATASOURCE_PASSWORD=password
+ENV SPRING_DATASOURCE_URL=jdbc:mysql://172.17.0.1:3306/db_paymybuddy
+CMD ["java", "-jar", "paymybuddy.jar"]
+```
+
+> En Kubernetes, `SPRING_DATASOURCE_URL` est surchargée pour pointer vers
+> le Service ClusterIP `mysql:3306` au lieu de l'IP docker0 `172.17.0.1`.
+
+---
+
+## ⚙️ Variables d'environnement
 
 | Variable | Valeur | Source dans K8s |
 |---|---|---|
@@ -58,45 +90,24 @@ paymybuddy-k8s/
 | `SPRING_DATASOURCE_PASSWORD` | `password` | Secret `mysql-secret` |
 | `SPRING_DATASOURCE_URL` | `jdbc:mysql://mysql:3306/db_paymybuddy?...` | Deployment (valeur fixe) |
 
-> L'URL remplace `172.17.0.1` (IP docker0 locale) par `mysql` (nom DNS du Service ClusterIP K8s).
-> Le nom de la base `db_paymybuddy` est identique à la configuration locale.
-
 ---
 
-## 🔨 Étape 1 — Builder l'image PayMyBuddy
+## 🗂️ Étape 1 — Préparer le stockage sur le nœud
 
-Le Dockerfile copie le JAR précompilé. Il faut donc d'abord compiler avec Maven.
-
-```bash
-# 1. Compiler l'application (produit target/paymybuddy.jar)
-mvn clean install
-
-# 2a. Avec Minikube — pointer Docker vers le daemon interne
-eval $(minikube docker-env)
-docker build -t paymybuddy:latest .
-
-# 2b. Avec un cluster kubeadm — builder sur le nœud ou pousser sur un registry
-docker build -t paymybuddy:latest .
-# Optionnel : pousser sur Docker Hub
-# docker tag paymybuddy:latest <user>/paymybuddy:latest && docker push <user>/paymybuddy:latest
-```
-
----
-
-## 🗂️ Étape 2 — Préparer le stockage sur le nœud
+Les données MySQL sont persistées dans `/data` du nœud, comme demandé dans le TP.
 
 ```bash
-# Sur le nœud worker (ou minikube ssh)
+# Sur le nœud (ou minikube ssh)
 sudo mkdir -p /data/mysql
 sudo chmod 777 /data/mysql
 ```
 
 ---
 
-## 🚀 Étape 3 — Déployer sur Kubernetes
+## 🚀 Étape 2 — Déployer sur Kubernetes
 
 ```bash
-# Appliquer tous les manifests dans l'ordre
+# Appliquer les manifests dans l'ordre
 kubectl apply -f 01-mysql-secret.yaml
 kubectl apply -f 02-mysql-configmap.yaml
 kubectl apply -f 03-mysql-storage.yaml
@@ -112,38 +123,38 @@ kubectl apply -f .
 
 ---
 
-## ✅ Étape 4 — Vérifier
+## ✅ Étape 3 — Vérifier le déploiement
 
 ```bash
-# État des pods (attendre que les deux soient Running)
+# Suivre le démarrage des pods en temps réel
 kubectl get pods -l app=paymybuddy -w
 
-# Services
+# Vérifier les services
 kubectl get svc -l app=paymybuddy
 
-# Volumes
+# Vérifier les volumes
 kubectl get pv,pvc
 
-# Logs MySQL (vérifier l'init SQL)
+# Logs MySQL (vérifier l'initialisation SQL)
 kubectl logs -l app=paymybuddy,tier=database --tail=50
 
-# Logs PayMyBuddy
+# Logs PayMyBuddy (vérifier la connexion à MySQL)
 kubectl logs -l app=paymybuddy,tier=frontend --tail=50
+
+# Détail d'un pod en cas de problème
+kubectl describe pod -l app=paymybuddy,tier=frontend
 ```
 
 ---
 
-## 🌐 Étape 5 — Accéder à l'application
+## 🌐 Étape 4 — Accéder à l'application
 
 ```bash
 # Récupérer l'IP du nœud
 kubectl get nodes -o wide
 
-# Ouvrir dans le navigateur :
-# http://<NODE_IP>:30080
-
-# Avec Minikube :
-minikube service paymybuddy --url
+# Ouvrir dans le navigateur
+http://<NODE_IP>:30080
 ```
 
 **Comptes de test disponibles (depuis data.sql) :**
@@ -153,6 +164,8 @@ minikube service paymybuddy --url
 | `security@mail.com` | `password` |
 | `hayley@mymail.com` | `password` |
 | `clara@mail.com` | `password` |
+| `smith@mail.com` | `password` |
+| `lambda@mail.com` | `password` |
 
 ---
 
@@ -168,15 +181,16 @@ sudo rm -rf /data/mysql
 
 ## ✅ Bonnes pratiques respectées
 
-- ✅ **Dockerfile officiel** du projet utilisé tel quel (`amazoncorretto:17-alpine`)
-- ✅ **3 variables d'env exactes** du Dockerfile : `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `SPRING_DATASOURCE_URL`
-- ✅ **Secrets Kubernetes** pour les credentials (pas de mots de passe en clair dans les Deployments)
-- ✅ **ConfigMap** avec `create.sql` + `data.sql` montés dans `/docker-entrypoint-initdb.d/` pour l'init automatique de la BDD
-- ✅ **PersistentVolume hostPath `/data`** pour stocker les données MySQL sur le nœud (exigence du TP)
-- ✅ **Service ClusterIP** pour MySQL (non exposé à l'extérieur)
-- ✅ **Service NodePort** pour PayMyBuddy (accès externe port 30080)
-- ✅ **initContainer** : PayMyBuddy attend que MySQL soit prêt avant de démarrer
+- ✅ **Image publique Docker Hub** `kady199/paymyboddy-backend:latest` — disponible sur tous les nœuds du cluster sans configuration supplémentaire
+- ✅ **imagePullPolicy: Always** — garantit que chaque nœud pull la bonne image, peu importe où le pod est schedulé
+- ✅ **3 variables d'env exactes** du Dockerfile officiel : `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `SPRING_DATASOURCE_URL`
+- ✅ **Secrets Kubernetes** pour les credentials MySQL (pas de mots de passe en clair dans les Deployments)
+- ✅ **ConfigMap** avec `create.sql` + `data.sql` montés dans `/docker-entrypoint-initdb.d/` pour l'initialisation automatique de la base
+- ✅ **PersistentVolume hostPath `/data/mysql`** — données MySQL stockées sur le nœud (exigence du TP)
+- ✅ **Service ClusterIP** pour MySQL — non exposé à l'extérieur, accessible uniquement via `mysql:3306` en interne
+- ✅ **Service NodePort** pour PayMyBuddy — accès externe sur le port `30080`
+- ✅ **initContainer** — PayMyBuddy attend que MySQL soit disponible sur le port 3306 avant de démarrer
 - ✅ **livenessProbe + readinessProbe** sur les deux Deployments
 - ✅ **resources requests/limits** définis sur tous les containers
-- ✅ **Stratégie Recreate** pour MySQL (single-instance stateful)
-- ✅ **imagePullPolicy: IfNotPresent** pour l'image buildée localement
+- ✅ **Stratégie Recreate** pour MySQL — obligatoire pour un pod stateful avec un seul réplicat
+- ✅ **Labels cohérents** (`app: paymybuddy`, `tier: database/frontend`) sur toutes les ressources
