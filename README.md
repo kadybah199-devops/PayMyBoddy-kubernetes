@@ -1,7 +1,6 @@
 # 🚀 Mini-Projet Kubernetes — Déploiement de PayMyBuddy
 
-Déploiement de l'application SpringBoot **PayMyBuddy** avec une base **MySQL** sur Kubernetes, à l'aide de manifests YAML écrits à la main (sans Helm).
-
+Déploiement de l'application SpringBoot **PayMyBuddy** avec une base **MySQL** sur Kubernetes, à l'aide de manifests YAML 
 ---
 
 ## 📁 Structure du projet
@@ -32,7 +31,7 @@ paymybuddy-k8s/
                    ▼
 ┌──────────────────────────────────────────┐
 │   Deployment PayMyBuddy (SpringBoot)     │
-│   image: kady199/paymyboddy-backend:latest│
+│   image: kady199/paymyboddy:1.0       │
 │   SPRING_DATASOURCE_URL=                 │
 │   jdbc:mysql://mysql:3306/db_paymybuddy  │
 └──────────────────┬───────────────────────┘
@@ -131,6 +130,8 @@ kubectl apply -f 03-mysql-storage.yaml
 kubectl apply -f 04-mysql-deployment.yaml
 kubectl apply -f 05-paymybuddy-deployment.yaml
 ```
+<img width="658" height="470" alt="Capture2" src="https://github.com/user-attachments/assets/e0c7176e-4b68-46ce-8705-466630684dec" />
+<img width="803" height="444" alt="9" src="https://github.com/user-attachments/assets/f7f91788-80ec-46ff-99a7-035ed3f6f774" />
 
 Ou tout d'un coup :
 
@@ -148,7 +149,7 @@ kubectl get pods -l app=paymybuddy -w
 
 # Vérifier les services
 kubectl get svc -l app=paymybuddy
-
+<img width="803" height="444" alt="9" src="https://github.com/user-attachments/assets/27c80355-ecda-44d0-ad0e-bfc57b9a930f" />
 # Vérifier les volumes
 kubectl get pv,pvc
 
@@ -161,7 +162,9 @@ kubectl logs -l app=paymybuddy,tier=frontend --tail=50
 # Détail d'un pod en cas de problème
 kubectl describe pod -l app=paymybuddy,tier=frontend
 ```
+<img width="658" height="470" alt="Capture2" src="https://github.com/user-attachments/assets/fe8caea0-f64b-4d25-99a0-31e78aee5f3e" />
 
+<img width="977" height="720" alt="8" src="https://github.com/user-attachments/assets/977f1503-1d1a-448c-b0e1-d3b8e228158b" />
 ---
 
 ## 🌐 Étape 4 — Accéder à l'application
@@ -169,10 +172,12 @@ kubectl describe pod -l app=paymybuddy,tier=frontend
 ```bash
 # Récupérer l'IP du nœud
 kubectl get nodes -o wide
+<img width="1362" height="649" alt="3" src="https://github.com/user-attachments/assets/82ada5b9-46de-434c-9cc5-5fb15581dd51" />
 
 # Ouvrir dans le navigateur
 http://<NODE_IP>:30080
 ```
+<img width="1354" height="689" alt="4" src="https://github.com/user-attachments/assets/e6fa3152-75fa-4a4c-b4d6-6b8238ea9a0a" />
 
 **Comptes de test disponibles (depuis data.sql) :**
 
@@ -183,6 +188,7 @@ http://<NODE_IP>:30080
 | `clara@mail.com` | `password` |
 | `smith@mail.com` | `password` |
 | `lambda@mail.com` | `password` |
+<img width="1344" height="607" alt="7" src="https://github.com/user-attachments/assets/4e8d1151-fce1-44b0-bdf9-c6e1a45b142c" />
 
 ---
 
@@ -192,22 +198,4 @@ http://<NODE_IP>:30080
 kubectl delete -f .
 kubectl delete pv mysql-pv
 sudo rm -rf /data/mysql
-```
 
----
-
-## ✅ Bonnes pratiques respectées
-
-- ✅ **Image publique Docker Hub** `kady199/paymybuddy:1.0` — disponible sur tous les nœuds du cluster sans configuration supplémentaire
-- ✅ **imagePullPolicy: Always** — garantit que chaque nœud pull la bonne image, peu importe où le pod est schedulé
-- ✅ **3 variables d'env exactes** du Dockerfile officiel : `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `SPRING_DATASOURCE_URL`
-- ✅ **Secrets Kubernetes** pour les credentials MySQL (pas de mots de passe en clair dans les Deployments)
-- ✅ **ConfigMap** avec `create.sql` + `data.sql` montés dans `/docker-entrypoint-initdb.d/` pour l'initialisation automatique de la base
-- ✅ **PersistentVolume hostPath `/data/mysql`** — données MySQL stockées sur le nœud (exigence du TP)
-- ✅ **Service ClusterIP** pour MySQL — non exposé à l'extérieur, accessible uniquement via `mysql:3306` en interne
-- ✅ **Service NodePort** pour PayMyBuddy — accès externe sur le port `30080`
-- ✅ **initContainer** — PayMyBuddy attend que MySQL soit disponible sur le port 3306 avant de démarrer
-- ✅ **livenessProbe + readinessProbe** sur les deux Deployments
-- ✅ **resources requests/limits** définis sur tous les containers
-- ✅ **Stratégie Recreate** pour MySQL — obligatoire pour un pod stateful avec un seul réplicat
-- ✅ **Labels cohérents** (`app: paymybuddy`, `tier: database/frontend`) sur toutes les ressources
