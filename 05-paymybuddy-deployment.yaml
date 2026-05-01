@@ -53,7 +53,7 @@ spec:
       containers:
         - name: paymybuddy
           image: kady199/paymyboddy-backend:latest
-          # Always = toujours puller depuis Docker Hub (image publique disponible)
+          # Always pull the public image from Docker Hub
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

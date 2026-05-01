@@ -106,6 +106,24 @@ sudo chmod 777 /data/mysql
 
 ## 🚀 Étape 2 — Déployer sur Kubernetes
 
+Avant d'appliquer les manifests vous pouvez soit laisser Kubernetes pull l'image
+depuis Docker Hub (le Deployment utilise `imagePullPolicy: Always`), soit
+pré-télécharger l'image sur les nœuds.
+
+- Pour récupérer l'image localement (Docker Desktop / Docker CLI disponible) :
+
+```bash
+docker pull kady199/paymyboddy-backend:latest
+```
+
+- Pour Minikube (recommandé si vous utilisez Minikube) :
+
+```bash
+minikube image pull kady199/paymyboddy-backend:latest
+```
+
+Ensuite, appliquer les manifests dans l'ordre :
+
 ```bash
 # Appliquer les manifests dans l'ordre
 kubectl apply -f 01-mysql-secret.yaml
