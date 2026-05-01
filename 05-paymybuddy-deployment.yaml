@@ -52,7 +52,7 @@ spec:
               echo "MySQL est disponible ! Démarrage de PayMyBuddy..."
       containers:
         - name: paymybuddy
-          image: kady199/paymyboddy-backend:latest
+          image: kady199/paymybuddy:1.0
           # Always pull the public image from Docker Hub
           imagePullPolicy: Always
           ports:

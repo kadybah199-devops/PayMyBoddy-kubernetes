@@ -60,8 +60,7 @@ paymybuddy-k8s/
 L'image de l'application est hébergée sur Docker Hub :
 
 ```
-kady199/paymyboddy-backend:latest
-sha256:a69c67a04e69b9021209ea626c47bb42ee2f6980c5519a4e294cf4c16f614ec3
+kady199/paymybuddy:1.0
 ```
 
 Elle a été buildée à partir du Dockerfile officiel du projet :
@@ -113,13 +112,13 @@ pré-télécharger l'image sur les nœuds.
 - Pour récupérer l'image localement (Docker Desktop / Docker CLI disponible) :
 
 ```bash
-docker pull kady199/paymyboddy-backend:latest
+docker pull kady199/paymybuddy:1.0
 ```
 
 - Pour Minikube (recommandé si vous utilisez Minikube) :
 
 ```bash
-minikube image pull kady199/paymyboddy-backend:latest
+minikube image load kady199/paymybuddy:1.0
 ```
 
 Ensuite, appliquer les manifests dans l'ordre :
@@ -199,7 +198,7 @@ sudo rm -rf /data/mysql
 
 ## ✅ Bonnes pratiques respectées
 
-- ✅ **Image publique Docker Hub** `kady199/paymyboddy-backend:latest` — disponible sur tous les nœuds du cluster sans configuration supplémentaire
+- ✅ **Image publique Docker Hub** `kady199/paymybuddy:1.0` — disponible sur tous les nœuds du cluster sans configuration supplémentaire
 - ✅ **imagePullPolicy: Always** — garantit que chaque nœud pull la bonne image, peu importe où le pod est schedulé
 - ✅ **3 variables d'env exactes** du Dockerfile officiel : `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `SPRING_DATASOURCE_URL`
 - ✅ **Secrets Kubernetes** pour les credentials MySQL (pas de mots de passe en clair dans les Deployments)
