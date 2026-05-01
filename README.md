@@ -1,4 +1,4 @@
-# 🚀 Mini-Projet Kubernetes — Déploiement de PayMyBuddy
+# Projet Kubernetes — Déploiement de PayMyBuddy
 
 Déploiement de l'application SpringBoot **PayMyBuddy** avec une base **MySQL** sur Kubernetes, à l'aide de manifests YAML 
 ---
